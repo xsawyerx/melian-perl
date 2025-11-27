@@ -1,0 +1,102 @@
+# NAME
+
+Melian - Perl client to the Melian cache
+
+# VERSION
+
+version 0.001
+
+# SYNOPSIS
+
+    use Melian;
+
+    my $client = Melian->new(
+        dsn => 'unix:///tmp/melian.sock',
+    );
+
+    my $row = $client->fetch_json_by_id(0, 0, 5);
+
+# DESCRIPTION
+
+`Melian` provides a Perl client for the Melian cache server. It handles the
+binary protocol, schema negotiation, and simple fetch helpers so applications
+can retrieve rows by table/index identifiers using either UNIX or TCP sockets.
+
+# METHODS
+
+## new
+
+    my $client = Melian->new(
+        'dsn'         => 'tcp://127.0.0.1:8765',
+        'schema_spec' => 'table1#0|60|id:int',
+        'timeout'     => 1,
+    );
+
+An example of a more complicated schema spec:
+
+    table1#0|60|id:int,table2#1|45|id:int;hostname:string
+
+Creates a new client. Require a `dsn` and optionally accept `timeout`,
+`schema`, `schema_spec`, or `schema_file` to control how the schema is
+loaded.
+
+Logic for handling schema:
+
+- If you provide a `schema` attribute, it uses it.
+- If you provide a `schema_file` attribute, it will parse it.
+- If you provide a `schema_spec` attribute, it will parse the spec.
+- If you provide none, will request the schema from the server.
+
+## connect
+
+    $client->connect();
+
+Explicitly opens the underlying socket if it is not already connected. Usually
+called automatically by fetch routines.
+
+## disconnect
+
+    $client->disconnect();
+
+Closes the socket connection.
+
+## fetch\_raw
+
+    my $payload = $client->fetch_raw($table_id, $index_id, $key_bytes);
+
+Sends a `FETCH` action and returns the raw payload as bytes for the specified
+table/index pair.
+
+## fetch\_json
+
+    my $row = $client->fetch_json($table_id, $index_id, $key_bytes);
+
+Like `fetch_raw` but decodes the JSON payload into a hashref, or returns
+`undef` if the server responds with an empty payload.
+
+## fetch\_json\_by\_id
+
+    my $row = $client->fetch_json_by_id($table_id, $index_id, $numeric_id);
+
+Helper for integer primary keys; packs the ID into little-endian bytes and
+returns the decoded row.
+
+## describe\_schema
+
+    my $schema = $client->_load_schema_from_describe();
+
+Sends a `DESCRIBE` action to the server and returns the parsed schema hashref.
+Used internally during construction when no explicit schema is provided.
+
+# AUTHORS
+
+- Sawyer X
+- Gonzalo Diethelm
+
+# COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2025 by Sawyer X.
+
+This is free software, licensed under:
+
+    The MIT (X11) License
