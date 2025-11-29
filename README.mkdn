@@ -14,7 +14,7 @@ version 0.001
         dsn => 'unix:///tmp/melian.sock',
     );
 
-    my $row = $client->fetch_json_by_id(0, 0, 5);
+    my $row = $client->fetch_by_int(0, 0, 5);
 
 # DESCRIPTION
 
@@ -69,14 +69,14 @@ table/index pair.
 
 ## fetch\_json
 
-    my $row = $client->fetch_json($table_id, $index_id, $key_bytes);
+    my $row = $client->fetch_by_string($table_id, $index_id, $key_bytes);
 
 Like `fetch_raw` but decodes the JSON payload into a hashref, or returns
 `undef` if the server responds with an empty payload.
 
 ## fetch\_json\_by\_id
 
-    my $row = $client->fetch_json_by_id($table_id, $index_id, $numeric_id);
+    my $row = $client->fetch_by_int($table_id, $index_id, $numeric_id);
 
 Helper for integer primary keys; packs the ID into little-endian bytes and
 returns the decoded row.
