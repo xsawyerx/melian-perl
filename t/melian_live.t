@@ -4,7 +4,7 @@ use Melian;
 use Test::More;
 use List::Util qw(first);
 
-plan( skip_all => 'Live Melian testing disabled' ) unless $ENV{'MELIAN_LIVE_TEST'};
+plan( skip_all => 'Live Melian testing disabled - set MELIAN_LIVE_TEST=1' ) unless $ENV{'MELIAN_LIVE_TEST'};
 
 my $melian = Melian->new(
     'dsn'     => 'unix:///tmp/melian.sock',
