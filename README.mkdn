@@ -67,14 +67,14 @@ Closes the socket connection.
 Sends a `FETCH` action and returns the raw payload as bytes for the specified
 table/index pair.
 
-## fetch\_json
+## fetch\_by\_string
 
     my $row = $client->fetch_by_string($table_id, $index_id, $key_bytes);
 
 Like `fetch_raw` but decodes the JSON payload into a hashref, or returns
 `undef` if the server responds with an empty payload.
 
-## fetch\_json\_by\_id
+## fetch\_by\_int
 
     my $row = $client->fetch_by_int($table_id, $index_id, $numeric_id);
 
