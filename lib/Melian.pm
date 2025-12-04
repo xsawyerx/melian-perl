@@ -96,10 +96,10 @@ sub fetch_raw_from {
 }
 
 sub fetch_raw {
-    my ( $self, $table_id, $index_id, $key ) = @_;
+    my ( $self, $table_id, $column_id, $key ) = @_;
     defined $key
         or croak("You must provide a key to fetch");
-    return $self->_send(ACTION_FETCH(), $table_id, $index_id, $key);
+    return $self->_send(ACTION_FETCH(), $table_id, $column_id, $key);
 }
 
 sub fetch_by_string_from {
@@ -115,8 +115,8 @@ sub fetch_by_string_from {
 }
 
 sub fetch_by_string {
-    my ($self, $table_id, $index_id, $key) = @_;
-    my $payload = $self->fetch_raw($table_id, $index_id, $key);
+    my ($self, $table_id, $column_id, $key) = @_;
+    my $payload = $self->fetch_raw($table_id, $column_id, $key);
     return undef if $payload eq '';
 
     my $decoded;
@@ -220,9 +220,9 @@ sub _load_schema_from_spec {
 }
 
 sub _send {
-    my ( $self, $action, $table_id, $index_id, $payload ) = @_;
+    my ( $self, $action, $table_id, $column_id, $payload ) = @_;
     $payload //= '';
-    defined $table_id && defined $index_id
+    defined $table_id && defined $column_id
         or croak("Invalid table ID or index ID");
 
     my $header = pack(
@@ -230,7 +230,7 @@ sub _send {
         MELIAN_HEADER_VERSION(),
         $action,
         $table_id,
-        $index_id,
+        $column_id,
         length $payload,
     );
 
@@ -357,24 +357,50 @@ Closes the socket connection.
 
 =head2 fetch_raw
 
-    my $payload = $client->fetch_raw($table_id, $index_id, $key_bytes);
+    my $payload = $client->fetch_raw($table_id, $column_id, $key_bytes);
 
 Sends a C<FETCH> action and returns the raw payload as bytes for the specified
 table/index pair.
 
 =head2 fetch_by_string
 
-    my $row = $client->fetch_by_string($table_id, $index_id, $key_bytes);
+    my $row = $client->fetch_by_string($table_id, $column_id, $string_key);
 
 Like C<fetch_raw> but decodes the JSON payload into a hashref, or returns
 C<undef> if the server responds with an empty payload.
 
+=head2 fetch_by_string_from
+
+    my $row = $client->fetch_by_string_from(
+        $table_name,
+        $column_name,
+        $string_key,
+    );
+
+Similar to C<fetch_by_string> but doesn't require IDs. Instead, it receives
+the table and column names and determines the IDs itself.
+
+C<fetch_by_string()> is faster.
+
 =head2 fetch_by_int
 
-    my $row = $client->fetch_by_int($table_id, $index_id, $numeric_id);
+    my $row = $client->fetch_by_int($table_id, $column_id, $numeric_key);
 
 Helper for integer primary keys; packs the ID into little-endian bytes and
 returns the decoded row.
+
+=head2 fetch_by_int_from
+
+    my $row = $client->fetch_by_int_from(
+        $table_name,
+        $column_name,
+        $numeric_key,
+    );
+
+Similar to C<fetch_by_int> but doesn't require IDs. Instead, it receives
+the table and column names and determines the IDs itself.
+
+C<fetch_by_int()> is faster.
 
 =head2 describe_schema
 
