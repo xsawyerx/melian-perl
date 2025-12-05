@@ -4,115 +4,228 @@ Melian - Perl client to the Melian cache
 
 # VERSION
 
-version 0.003
+version 0.004
 
 # SYNOPSIS
 
     use Melian;
 
-    my $client = Melian->new(
-        dsn => 'unix:///tmp/melian.sock',
+    #-----------------------------------------------
+    # OO INTERFACE (easy, name-based)
+    #-----------------------------------------------
+    my $melian = Melian->new(
+        'dsn' => 'unix:///tmp/melian.sock',
     );
 
-    my $row = $client->fetch_by_int(0, 0, 5);
+    my $row = $melian->fetch_by_string_from( 'cats', 'name', 'Pixel' );
+
+    # Using IDs directly (faster)
+    my $row2 = $melian->fetch_by_string( 1, 1, 'Pixel' );
+
+    #-----------------------------------------------
+    # FUNCTIONAL INTERFACE (fastest)
+    #-----------------------------------------------
+    use Melian qw(fetch_by_string_with);
+
+    my $conn = Melian->create_connection(
+        'dsn' => 'unix:///tmp/melian.sock',
+    );
+
+    # Must use IDs in functional mode
+    my $row3 = fetch_by_string_with( $conn, 1, 1, 'Pixel' );
 
 # DESCRIPTION
 
-`Melian` provides a Perl client for the Melian cache server. It handles the
-binary protocol, schema negotiation, and simple fetch helpers so applications
-can retrieve rows by table/index identifiers using either UNIX or TCP sockets.
+Melian is a tiny, fast, no-nonsense Perl client for the Melian cache server.
+
+[Melian](https://github.com/xsawyerx/melian/) (the server) keeps full table
+snapshots in memory. Lookups are done entirely inside the server and returned
+as small JSON blobs. Think of it as a super-fast read-only lookup service.
+
+This module gives you two ways to talk to Melian:
+
+## Object-Oriented Mode (easy)
+
+Use table names and column names:
+
+    $melian->fetch_by_string_from( 'cats', 'name', 'Pixel' );
+
+Behind the scenes, the module:
+
+- Looks up the table ID in the schema
+- Looks up the column ID in the schema
+- Builds the binary request to the server
+- Reads the reply and decodes JSON
+
+This is the most convenient way. It is a little slower, because there is some
+name lookup and method dispatch each time.
+
+## Functional Mode (fastest)
+
+Use this when you want raw speed:
+
+    my $conn = Melian->create_connection(...);
+    my $row = fetch_by_string_with( $conn, $table_id, $column_id, $key );
+
+This avoids:
+
+- Method calls
+- Object construction
+- Lookup of table IDs and column IDs
+
+It is simply: "write a request to the socket, read a response."
+
+If you're chasing microseconds, this is the mode for you.
+
+# SCHEMA
+
+Melian needs a schema so it knows which table IDs and column IDs correspond
+to which names. A schema looks something like:
+
+    people#0|60|id:int
+
+Or:
+
+    people#0|60|id:int,cats#1|45|id:int;name:string
+
+The format is simple:
+
+- `table_name#table_id`
+- `|refresh_period_in_seconds`
+- `|column_name#column_id:column_type` (multiple columns separated by `;`)
+
+You do NOT need to write this schema unless you want to. If you do not supply
+one, Melian will request it automatically from the server at startup.
+
+## Accessing table and column IDs
+
+Once the client is constructed:
+
+    my $schema = $melian->schema();
+
+Each table entry contains:
+
+    {
+        name    => "cats",
+        id      => 1,
+        period  => 45,
+        indexes => [
+            { id => 0, column => "id",   type => "int"    },
+            { id => 1, column => "name", type => "string" },
+        ],
+    }
+
+If you use the functional API, you probably want to extract these once at
+startup and store them in constants:
+
+    use constant {
+        'CAT_ID_TABLE'    => 1,
+        'CAT_ID_COLUMN'   => 0, # integer ID
+        'CAT_NAME_COLUMN' => 1, # string column
+    };
+
+This saves name lookups on every request.
 
 # METHODS
 
-## new
+## `new(...)`
 
-    my $client = Melian->new(
-        'dsn'         => 'tcp://127.0.0.1:8765',
-        'schema_spec' => 'table1#0|60|id:int',
-        'timeout'     => 1,
+    my $melian = Melian->new(
+        'dsn'         => 'unix:///tmp/melian.sock',
+        'timeout'     => 1, # Only relevant for TCP/IP
+        'schema_spec' => 'people#0|60|id:int',
     );
 
-An example of a more complicated schema spec:
+Creates a new client and automatically loads the schema.
 
-    table1#0|60|id:int,table2#1|45|id:int;hostname:string
+You may specify:
 
-Creates a new client. Require a `dsn` and optionally accept `timeout`,
-`schema`, `schema_spec`, or `schema_file` to control how the schema is
-loaded.
+- `schema` — already-parsed schema hashref
+- `schema_spec` — inline schema description
+- `schema_file` — path to JSON schema file
+- nothing — Melian will ask the server for the schema
 
-Logic for handling schema:
+## `connect()`
 
-- If you provide a `schema` attribute, it uses it.
-- If you provide a `schema_file` attribute, it will parse it.
-- If you provide a `schema_spec` attribute, it will parse the spec.
-- If you provide none, will request the schema from the server.
+Opens the underlying socket. Called automatically by `new()`.
 
-## connect
+## `disconnect()`
 
-    $client->connect();
+Closes the socket.
 
-Explicitly opens the underlying socket if it is not already connected. Called
-automatically when create a new Melian instance.
+## `fetch_raw($table_id, $column_id, $key_bytes)`
 
-## disconnect
+Fetches a raw JSON string. Does NOT decode it. Assumes input is encoded
+correctly.
 
-    $client->disconnect();
+## `fetch_raw_from($table_name, $column_name, $key_bytes)`
 
-Closes the socket connection.
+Same as above, but uses names instead of IDs.
 
-## fetch\_raw
+## `fetch_by_string($table_id, $column_id, $string_key)`
 
-    my $payload = $client->fetch_raw($table_id, $column_id, $key_bytes);
+Fetches JSON from the server and decodes into a Perl hashref.
 
-Sends a `FETCH` action and returns the raw payload as bytes for the specified
-table/index pair.
+## `fetch_by_string_from($table_name, $column_name, $string_key)`
 
-## fetch\_by\_string
+Name-based version.
 
-    my $row = $client->fetch_by_string($table_id, $column_id, $string_key);
+## `fetch_by_int($table_id, $column_id, $int)`
 
-Like `fetch_raw` but decodes the JSON payload into a hashref, or returns
-`undef` if the server responds with an empty payload.
+Same as `fetch_by_string`, but the key is packed as a 32-bit integer.
 
-## fetch\_by\_string\_from
+## `fetch_by_int_from($table_name, $column_name, $int)`
 
-    my $row = $client->fetch_by_string_from(
-        $table_name,
-        $column_name,
-        $string_key,
-    );
+Name-based version.
 
-Similar to `fetch_by_string` but doesn't require IDs. Instead, it receives
-the table and column names and determines the IDs itself.
+# FUNCTIONS
 
-`fetch_by_string()` is faster.
+These functions form the high-speed functional interface. They require a
+socket returned by `create_connection()`.
 
-## fetch\_by\_int
+## `create_connection(%args)`
 
-    my $row = $client->fetch_by_int($table_id, $column_id, $numeric_key);
+Returns a raw socket connected to the server. Same options as `new()`, but
+no object is created.
 
-Helper for integer primary keys; packs the ID into little-endian bytes and
-returns the decoded row.
+## `fetch_raw_with($conn, $table_id, $column_id, $key_bytes)`
 
-## fetch\_by\_int\_from
+## `fetch_by_string_with($conn, $table_id, $column_id, $string_key)`
 
-    my $row = $client->fetch_by_int_from(
-        $table_name,
-        $column_name,
-        $numeric_key,
-    );
+## `fetch_by_int_with($conn, $table_id, $column_id, $int)`
 
-Similar to `fetch_by_int` but doesn't require IDs. Instead, it receives
-the table and column names and determines the IDs itself.
+These behave like the corresponding OO methods but skip object overhead and
+schema lookup.
 
-`fetch_by_int()` is faster.
+## `table_of($schema, $table_name)`
 
-## describe\_schema
+    my $table_data = table_of( $schema, 'cats' );
+    my $table_id   = $table_data->{'id'};
 
-    my $schema = $client->_load_schema_from_describe();
+Fetches the table information from the schema.
 
-Sends a `DESCRIBE` action to the server and returns the parsed schema hashref.
-Used internally during construction when no explicit schema is provided.
+## `column_id_of($table_data, $column_name)`
+
+    my $table_data = table_of( $schema, 'cats' );
+    my $column_id  = column_id_of( $table_data, 'name' );
+
+Fetches the ID of a column from a given table metadata.
+
+## `load_schema_from_describe($conn)`
+
+    my $schema = load_schema_from_describe($conn);
+
+This helps you retrieve the schema if you're using the functional
+interface. You can then use this schema to determine table and column
+IDs.
+
+# PERFORMANCE NOTES
+
+- OO mode is convenient but has overhead from name lookups and method calls.
+- ID-based OO mode is faster because it skips name lookups.
+- Functional mode is the fastest and is roughly equivalent to calling `syswrite`
+and `sysread` directly in Perl.
+- If you care about performance, resolve table and column IDs once at startup.
 
 # AUTHORS
 
