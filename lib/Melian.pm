@@ -15,7 +15,13 @@ use constant {
 };
 
 use Exporter qw(import);
-our @EXPORT_OK = qw( fetch_raw_with fetch_by_int_with fetch_by_string_with );
+our @EXPORT_OK = qw(
+    fetch_raw_with
+    fetch_by_int_with
+    fetch_by_string_with
+    table_id_of
+    column_id_of
+);
 
 sub new {
     my ($class, @opts) = @_;
@@ -125,10 +131,9 @@ sub disconnect {
 }
 
 sub disconnect_socket {
-    my $socket = shift
-        or return;
-    $socket->close();
-    $socket = undef;
+    $_[0] or return;
+    $_[0]->close();
+    $_[0] = undef;
     return 1;
 }
 
@@ -136,11 +141,11 @@ sub fetch_raw_from {
     my ( $self, $table_name, $column_name, $key ) = @_;
 
     # Get table ID
-    my $table = $self->_get_table($table_name);
+    my $table = $self->get_table_id($table_name);
     my $table_id = $table->{'id'};
 
     # Get column ID
-    my $column_id = $self->_get_column_id( $table, $column_name );
+    my $column_id = $self->get_column_id( $table, $column_name );
     return $self->fetch_raw( $table_id, $column_id, $key );
 }
 
@@ -162,11 +167,11 @@ sub fetch_by_string_from {
     my ( $self, $table_name, $column_name, $key ) = @_;
 
     # Get table ID
-    my $table = $self->_get_table($table_name);
+    my $table = $self->get_table_id($table_name);
     my $table_id = $table->{'id'};
 
     # Get column ID
-    my $column_id = $self->_get_column_id( $table, $column_name );
+    my $column_id = $self->get_column_id( $table, $column_name );
     return $self->fetch_by_string( $table_id, $column_id, $key );
 }
 
@@ -174,17 +179,7 @@ sub fetch_by_string {
     my ($self, $table_id, $column_id, $key) = @_;
     my $payload = $self->fetch_raw($table_id, $column_id, $key);
     return undef if $payload eq '';
-
-    my $decoded;
-    eval {
-        $decoded = decode_json($payload);
-        1;
-    } or do {
-        my $error = $@ || 'Zombie error';
-        croak("Failed to decode JSON response: $error");
-    };
-
-    return $decoded;
+    return decode_json($payload);
 }
 
 # $conn, $table_id, $column_id, $key
@@ -198,11 +193,11 @@ sub fetch_by_int_from {
     my ( $self, $table_name, $column_name, $id ) = @_;
 
     # Get table ID
-    my $table = $self->_get_table($table_name);
+    my $table = $self->get_table_id($table_name);
     my $table_id = $table->{'id'};
 
     # Get column ID
-    my $column_id = $self->_get_column_id( $table, $column_name );
+    my $column_id = $self->get_column_id( $table, $column_name );
 
     return $self->fetch_by_int( $table_id, $column_id, $id );
 }
@@ -224,10 +219,7 @@ sub _load_schema_from_describe {
     defined $payload && length $payload
         or croak('Could not get schema data');
 
-    my $decoded = eval { decode_json($payload) };
-    croak("Failed to decode schema response: $@") if $@;
-
-    return $decoded;
+    return decode_json($payload);
 }
 
 
@@ -337,7 +329,7 @@ sub _write_all {
     my $len = length $_[1];
     while ( $offset < $len ) {
         my $written = syswrite( $_[0], $_[1], $len - $offset, $offset );
-        croak "Socket write failed: $!" unless defined $written && $written > 0;
+        croak("Melian write failed: $!") unless defined $written && $written > 0;
         $offset += $written;
     }
 }
@@ -348,15 +340,15 @@ sub _read_exactly {
 
     while ( length($buffer) < $_[1] ) {
         my $read = sysread( $_[0], my $chunk, $_[1] - length $buffer );
-        croak "Socket read failed: $!" unless defined $read;
-        croak "Socket closed unexpectedly" if $read == 0;
+        croak("Melian read failed: $!") unless defined $read;
+        croak("Melian socket closed unexpectedly") if $read == 0;
         $buffer .= $chunk;
     }
 
     return $buffer;
 }
 
-sub _get_table {
+sub get_table_id {
     my ( $self, $name ) = @_;
     my $table = List::Util::first(
         sub { $_->{'name'} eq $name },
@@ -367,7 +359,17 @@ sub _get_table {
     return $table;
 }
 
-sub _get_column_id {
+sub table_id_of {
+    my ( $schema, $name ) = @_;
+    my $table = List::Util::first(
+        sub { $_->{'name'} eq $name },
+        @{ $schema->{'tables'} }
+    );
+    $table or croak("Cannot find table named '$name'");
+    return $table;
+}
+
+sub get_column_id {
     my ( $self, $table, $name ) = @_;
 
     # Get column ID
@@ -379,6 +381,20 @@ sub _get_column_id {
     $column or croak("Cannot find column named '$name'");
     return $column->{'id'};
 }
+
+sub column_id_of {
+    my ( $table, $name ) = @_;
+
+    # Get column ID
+    my $column = List::Util::first(
+        sub { $_->{'column'} eq $name },
+        @{ $table->{'indexes'} },
+    );
+
+    $column or croak("Cannot find column named '$name'");
+    return $column->{'id'};
+}
+
 
 sub DESTROY { $_[0]->disconnect() }
 
