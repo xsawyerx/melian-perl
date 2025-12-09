@@ -243,7 +243,7 @@ sub load_schema_from_file {
     return $decoded;
 }
 
-# table1#0|60|id:int,table2#1|45|id:int;hostname:string
+# table1#0|60|id#0:int,table2#1|45|id#0:int;hostname#1:string
 sub load_schema_from_spec {
     my $spec = shift;
     my %data;
@@ -571,7 +571,7 @@ This saves name lookups on every request.
     my $melian = Melian->new(
         'dsn'         => 'unix:///tmp/melian.sock',
         'timeout'     => 1, # Only relevant for TCP/IP
-        'schema_spec' => 'people#0|60|id:int',
+        'schema_spec' => 'people#0|60|id#0:int',
     );
 
 Creates a new client and automatically loads the schema.
