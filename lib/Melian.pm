@@ -507,11 +507,11 @@ If you're chasing microseconds, this is the mode for you.
 Melian needs a schema so it knows which table IDs and column IDs correspond
 to which names. A schema looks something like:
 
-    people#0|60|id:int
+    people#0|60|id#0:int
 
 Or:
 
-    people#0|60|id:int,cats#1|45|id:int;name:string
+    people#0|60|id#0:int,cats#1|45|id#0:int;name#1:string
 
 The format is simple:
 
