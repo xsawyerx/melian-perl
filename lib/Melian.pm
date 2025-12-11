@@ -261,11 +261,12 @@ sub load_schema_from_spec {
         );
 
         my @columns;
-        my $column_id = 0;
         foreach my $column_data ( split m{;}, $columns ) {
-            my ( $column_name, $column_type ) = split /:/, $column_data;
+            my ( $column_data, $column_type ) = split /:/, $column_data;
+            my ( $column_name, $column_id )   = split m{#}, $column_data;
+
             push @{ $table_entry{'indexes'} }, {
-                'id'     => $column_id++,
+                'id'     => $column_id,
                 'column' => $column_name,
                 'type'   => $column_type,
             }
